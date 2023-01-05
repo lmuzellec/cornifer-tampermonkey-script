@@ -40,6 +40,9 @@ window.onload = () => {
 function mainFromReddit() {
   console.log("Cornifer script loaded from reddit");
 
+  // inject toastify css
+  GM_addStyle(GM_getResourceText("TOASTIFY_CSS"));
+
   // find r/place iframe
   iframe = document.querySelector(
     'iframe[src~="https://hot-potato.reddit.com/embed"]'
@@ -55,15 +58,28 @@ function mainFromReddit() {
 function connectSocket() {
   socket = new WebSocket("wss://lmuzellec.dev/ws");
 
+  /**
+   * Send a message to Cornifer-server
+   * @param {string} type
+   * @param {any} data
+   */
   const sendToSocket = (type, data) => {
     socket.send(JSON.stringify({ type, data }));
   };
 
   socket.onopen = () => {
-    console.log("Connected to Cornifer");
+    showToast("Connected to server");
   };
 
+  /**
+   * Handle messages from Cornifer-server
+   * @param {MessageEvent<string>} event
+   * @returns
+   */
   socket.onmessage = (event) => {
+    /**
+     * @type {{type: string, data: any}}
+     */
     var message;
     try {
       message = JSON.parse(event.data);
@@ -95,8 +111,8 @@ function connectSocket() {
     }
   };
 
-  socket.onclose = (event) => {
-    console.log("Disconnected from Cornifer");
+  socket.onclose = () => {
+    showToastError("Disconnected from Cornifer, retrying in 5s");
     socket.close();
     setTimeout(() => {
       connectSocket();
@@ -106,6 +122,30 @@ function connectSocket() {
   setInterval(() => {
     if (socket && socket.readyState === WebSocket.OPEN) sendToSocket("ping");
   }, 30000);
+}
+
+/**
+ * Show a toast message in reddit
+ * @param {string} text
+ */
+function showToast(
+  text,
+  duration = 5000,
+  color = "#000",
+  backgroundColor = "#0f0"
+) {
+  Toastify({
+    text,
+    duration,
+    style: {
+      color,
+      background: backgroundColor,
+    },
+  }).showToast();
+}
+
+function showToastError(text, duration = 5000) {
+  showToast(text, duration, "#fff", "#f00");
 }
 
 /**
