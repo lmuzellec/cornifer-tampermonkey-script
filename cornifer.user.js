@@ -14,7 +14,13 @@
 // @resource     TOASTIFY_CSS https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css
 // ==/UserScript==
 
+/**
+ * @type {WebSocket}
+ */
 var socket;
+/**
+ * @type {HTMLIFrameElement}
+ */
 var iframe;
 
 /**
@@ -45,7 +51,7 @@ function mainFromReddit() {
 
   // find r/place iframe
   iframe = document.querySelector(
-    'iframe[src~="https://hot-potato.reddit.com/embed"]'
+    'iframe[src*="https://hot-potato.reddit.com/embed"]'
   );
 
   // connect to Cornifer-server
@@ -96,8 +102,10 @@ function connectSocket() {
     switch (message.type) {
       case "message":
         console.log("Message from Cornifer: " + message.data);
-        // send custom message to iframe
-        iframe.contentWindow.postMessage(message.data, "*");
+        break;
+      case "create":
+        showToast("New Overlay created : " + message.data.id);
+        iframe.contentWindow.postMessage(message, "*");
         break;
       case "pong":
         console.debug("Pong from Cornifer");
@@ -153,15 +161,98 @@ function showToastError(text, duration = 5000) {
  */
 
 /**
+ * @type {{[key: string]: {x: number, y: number, width: number, height: number, src: string, element: HTMLDivElement}}}}
+ */
+var overlays = {};
+
+/**
  * Main iframe side script
  */
+
 function mainFromIframe() {
   console.log("Cornifer script loaded from iframe");
 
+  connectIframe();
+}
+
+function connectIframe() {
   // listen to custom messages from reddit
-  window.onmessage = function (e) {
-    if (e.data == "hello") {
-      alert("Hello from server!");
+  /**
+   * Handle messages from reddit
+   * @param {MessageEvent<{type: string, data: any}>} event
+   * @returns
+   */
+  window.onmessage = (event) => {
+    const message = event.data;
+    switch (message.type) {
+      case "create":
+        /**
+         * @type {{id: string, x: number, y: number, width: number, height: number, src: string}}
+         */
+        var createData = message.data;
+        if (
+          !createData.id ||
+          !createData.x ||
+          !createData.y ||
+          !createData.width ||
+          !createData.height ||
+          !createData.src
+        ) {
+          console.error("Invalid create message");
+          return;
+        }
+
+        if (overlays[createData.id]) {
+          console.error("Overlay already exists");
+          return;
+        }
+
+        const element = createOverlay(
+          createData.id,
+          createData.x,
+          createData.y,
+          createData.width,
+          createData.height,
+          createData.src
+        );
+
+        overlays[createData.id] = {
+          x: createData.x,
+          y: createData.y,
+          width: createData.width,
+          height: createData.height,
+          src: createData.src,
+          element,
+        };
+        break;
+      default:
+        break;
     }
   };
+}
+
+/**
+ * Create an overlay and add it to the page
+ * @param {string} id
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ * @param {string} src
+ * @returns {HTMLDivElement}
+ */
+function createOverlay(id, x, y, width, height, src) {
+  x *= 50;
+  y *= 50;
+  width *= 50;
+  height *= 50;
+  const div = document.createElement("div");
+  div.className = "cornifer-overlay";
+  div.id = "cornifer-overlay-" + id;
+  div.style = `height:${height}px; width:${width}px; position: absolute; inset: 0px; transform: translateX(${x}px) translateY(${y}px); background-size: cover; image-rendering: pixelated; background-image: url('${src}'); opacity: 1`;
+  document
+    .getElementsByTagName("mona-lisa-embed")[0]
+    .shadowRoot.children[0].getElementsByTagName("mona-lisa-camera")[0]
+    .shadowRoot.children[0].children[0].children[0].appendChild(div);
+  return div;
 }
