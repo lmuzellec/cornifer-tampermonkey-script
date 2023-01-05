@@ -55,38 +55,57 @@ function mainFromReddit() {
 function connectSocket() {
   socket = new WebSocket("wss://lmuzellec.dev/ws");
 
+  const sendToSocket = (type, data) => {
+    socket.send(JSON.stringify({ type, data }));
+  };
+
   socket.onopen = () => {
     console.log("Connected to Cornifer");
   };
 
   socket.onmessage = (event) => {
-    var data;
-
+    var message;
     try {
-      data = JSON.parse(event.data);
+      message = JSON.parse(event.data);
     } catch (e) {
-      console.log("Error parsing data");
+      console.error("Invalid JSON from Cornifer");
       return;
     }
 
-    switch (data.type) {
+    if (!message.type) {
+      console.error("No type in message from Cornifer");
+      return;
+    }
+
+    switch (message.type) {
       case "message":
-        console.log("Message from Cornifer: " + data.message);
+        console.log("Message from Cornifer: " + message.data);
         // send custom message to iframe
-        iframe.contentWindow.postMessage(data.message, "*");
+        iframe.contentWindow.postMessage(message.data, "*");
+        break;
+      case "pong":
+        console.debug("Pong from Cornifer");
+        break;
+      case "error":
+        console.error("Error from Cornifer: " + message.data);
         break;
       default:
+        console.error("Unknown message from Cornifer");
         break;
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     console.log("Disconnected from Cornifer");
     socket.close();
     setTimeout(() => {
       connectSocket();
     }, 5000);
   };
+
+  setInterval(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) sendToSocket("ping");
+  }, 30000);
 }
 
 /**
