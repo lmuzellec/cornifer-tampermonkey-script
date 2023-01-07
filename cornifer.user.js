@@ -190,40 +190,50 @@ function connectIframe() {
          * @type {{id: string, x: number, y: number, width: number, height: number, src: string}}
          */
         var createData = message.data;
-        if (
-          !createData.id ||
-          !createData.x ||
-          !createData.y ||
-          !createData.width ||
-          !createData.height ||
-          !createData.src
-        ) {
-          console.error("Invalid create message");
-          return;
+        {
+          const { id, x, y, width, height, src } = createData;
+          if (!id || !x || !y || !width || !height || !src) {
+            console.error("Invalid create message");
+            return;
+          }
+
+          if (overlays[id]) {
+            console.error("Overlay already exists");
+            return;
+          }
+
+          const element = createOverlay(id, x, y, width, height, src);
+
+          overlays[createData.id] = {
+            x,
+            y,
+            width,
+            height,
+            src,
+            element,
+          };
         }
+        break;
+      case "update":
+        /**
+         * @type {{id: string, x?: number, y?: number, width?: number, height?: number, src?: string}}
+         */
+        var updateData = message.data;
+        {
+          const { id, x, y, width, height, src } = updateData;
 
-        if (overlays[createData.id]) {
-          console.error("Overlay already exists");
-          return;
+          if (!id) {
+            console.error("Invalid update message");
+            return;
+          }
+
+          if (!overlays[id]) {
+            console.error("Overlay doesn't exist");
+            return;
+          }
+
+          updateOverlay(updateData.id, x, y, width, height, src);
         }
-
-        const element = createOverlay(
-          createData.id,
-          createData.x,
-          createData.y,
-          createData.width,
-          createData.height,
-          createData.src
-        );
-
-        overlays[createData.id] = {
-          x: createData.x,
-          y: createData.y,
-          width: createData.width,
-          height: createData.height,
-          src: createData.src,
-          element,
-        };
         break;
       default:
         break;
@@ -255,4 +265,44 @@ function createOverlay(id, x, y, width, height, src) {
     .shadowRoot.children[0].getElementsByTagName("mona-lisa-camera")[0]
     .shadowRoot.children[0].children[0].children[0].appendChild(div);
   return div;
+}
+
+/**
+ * Update an overlay if it exists
+ * @param {string} id
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ * @param {string} src
+ * @returns
+ */
+function updateOverlay(id, x, y, width, height, src) {
+  if (!overlays[id]) {
+    console.error("Overlay doesn't exist");
+    return;
+  }
+
+  const overlay = overlays[id];
+
+  if (x) {
+    overlay.x = x;
+    overlay.element.style.transform = `translateX(${x}px)`;
+  }
+  if (y) {
+    overlay.y = y;
+    overlay.element.style.transform = `translateY(${y}px)`;
+  }
+  if (width) {
+    overlay.width = width;
+    overlay.element.style.width = width + "px";
+  }
+  if (height) {
+    overlay.height = height;
+    overlay.element.style.width = height + "px";
+  }
+  if (src) {
+    overlay.src = src;
+    overlay.element.style.backgroundImage = `url(${src})`;
+  }
 }
