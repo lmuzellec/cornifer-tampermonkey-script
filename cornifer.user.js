@@ -66,15 +66,15 @@ function connectSocket() {
 
   /**
    * Send a message to Cornifer-server
-   * @param {string} type
-   * @param {any} data
+   * @param {{type: string, data: any}} message
    */
-  const sendToSocket = (type, data) => {
-    socket.send(JSON.stringify({ type, data }));
+  const sendToSocket = (message) => {
+    socket.send(JSON.stringify(message));
   };
 
   socket.onopen = () => {
     showToast("Connected to server");
+    sendToSocket({ type: "overlays" });
   };
 
   /**
@@ -107,6 +107,14 @@ function connectSocket() {
         showToast("New Overlay created : " + message.data.id);
         iframe.contentWindow.postMessage(message, "*");
         break;
+      case "update":
+        showToast("Overlay updated : " + message.data.id);
+        iframe.contentWindow.postMessage(message, "*");
+        break;
+      case "overlays":
+        showToast("Overlays loaded");
+        iframe.contentWindow.postMessage(message, "*");
+        break;
       case "pong":
         console.debug("Pong from Cornifer");
         break;
@@ -128,7 +136,8 @@ function connectSocket() {
   };
 
   setInterval(() => {
-    if (socket && socket.readyState === WebSocket.OPEN) sendToSocket("ping");
+    if (socket && socket.readyState === WebSocket.OPEN)
+      sendToSocket({ type: "ping" });
   }, 30000);
 }
 
@@ -202,16 +211,7 @@ function connectIframe() {
             return;
           }
 
-          const element = createOverlay(id, x, y, width, height, src);
-
-          overlays[createData.id] = {
-            x,
-            y,
-            width,
-            height,
-            src,
-            element,
-          };
+          createOverlay(id, x, y, width, height, src);
         }
         break;
       case "update":
@@ -233,6 +233,17 @@ function connectIframe() {
           }
 
           updateOverlay(updateData.id, x, y, width, height, src);
+        }
+        break;
+      case "overlays":
+        /**
+         * @type {{[id: string]: {id: string, x: number, y: number, width: number, height: number, src: string}}}
+         */
+        var overlaysData = message.data;
+        for (const overlayId in overlaysData) {
+          const overlay = overlaysData[overlayId];
+          const { id, x, y, width, height, src } = overlay;
+          createOverlay(id, x, y, width, height, src);
         }
         break;
       default:
@@ -264,7 +275,16 @@ function createOverlay(id, x, y, width, height, src) {
     .getElementsByTagName("mona-lisa-embed")[0]
     .shadowRoot.children[0].getElementsByTagName("mona-lisa-camera")[0]
     .shadowRoot.children[0].children[0].children[0].appendChild(div);
-  return div;
+
+  overlays[id] = {
+    id,
+    x,
+    y,
+    width,
+    height,
+    src,
+    element: div,
+  };
 }
 
 /**
