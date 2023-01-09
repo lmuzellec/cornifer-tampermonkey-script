@@ -24,6 +24,16 @@ var socket;
 var iframe;
 
 /**
+ * @type {boolean}
+ */
+var loadedLocalStorage = false;
+
+/**
+ * @type {number}
+ */
+var increasingTimeout = 1;
+
+/**
  * Start the corresponding script when everything is loaded
  */
 window.onload = () => {
@@ -75,6 +85,7 @@ function connectSocket() {
   socket.onopen = () => {
     showToast("Connected to server");
     sendToSocket({ type: "overlays" });
+    increasingTimeout = 1;
   };
 
   /**
@@ -114,6 +125,7 @@ function connectSocket() {
       case "overlays":
         showToast("Overlays loaded");
         iframe.contentWindow.postMessage(message, "*");
+        loadedLocalStorage = true;
         break;
       case "pong":
         console.debug("Pong from Cornifer");
@@ -127,18 +139,49 @@ function connectSocket() {
     }
   };
 
-  socket.onclose = () => {
-    showToastError("Disconnected from Cornifer, retrying in 5s");
-    socket.close();
+  socket.onclose = (event) => {
+    if (event.code !== 1000 && !loadedLocalStorage) {
+      iframe.contentWindow.postMessage({ type: "loadLocal" }, "*");
+      loadedLocalStorage = true;
+    }
+    showToastError(
+      `Disconnected from Cornifer, retrying in ${5 * increasingTimeout}s`
+    );
     setTimeout(() => {
       connectSocket();
-    }, 5000);
+    }, 5000 * increasingTimeout);
+    increasingTimeout = Math.min(increasingTimeout + 1, 12);
   };
 
   setInterval(() => {
     if (socket && socket.readyState === WebSocket.OPEN)
       sendToSocket({ type: "ping" });
   }, 30000);
+
+  /**
+   * Handle messages from iframe
+   * @param {MessageEvent<{type: string, data: any}>} event
+   * @returns
+   */
+  window.onmessage = (event) => {
+    if (event.origin !== "https://hot-potato.reddit.com") return;
+    const message = event.data;
+    if (!message.type) {
+      console.error("No type in message from iframe");
+      return;
+    }
+
+    switch (event.data.type) {
+      case "loadedLocalStorage":
+        showToast("Overlays loaded from local storage");
+        break;
+      case "error":
+        showToastError(message.data);
+        break;
+      default:
+        break;
+    }
+  };
 }
 
 /**
@@ -170,9 +213,12 @@ function showToastError(text, duration = 5000) {
  */
 
 /**
- * @type {{[key: string]: {x: number, y: number, width: number, height: number, src: string, element: HTMLDivElement}}}}
+ * @type {{overlays: {[key: string]: {id: string, x: number, y: number, width: number, height: number, src: string}}, lastUpdate: number}}
  */
-var overlays = {};
+var corniferData = {
+  overlays: {},
+  lastUpdate: 0,
+};
 
 /**
  * Main iframe side script
@@ -206,12 +252,13 @@ function connectIframe() {
             return;
           }
 
-          if (overlays[id]) {
+          if (corniferData.overlays[id]) {
             console.error("Overlay already exists");
             return;
           }
 
           createOverlay(id, x, y, width, height, src);
+          corniferData.lastUpdate = Date.now();
         }
         break;
       case "update":
@@ -227,28 +274,53 @@ function connectIframe() {
             return;
           }
 
-          if (!overlays[id]) {
+          if (!corniferData.overlays[id]) {
             console.error("Overlay doesn't exist");
             return;
           }
 
           updateOverlay(updateData.id, x, y, width, height, src);
+          corniferData.lastUpdate = Date.now();
         }
         break;
+      case "loadLocal":
+        message.data = JSON.parse(localStorage.getItem("cornifer-overlays"));
+        if (!message.data) {
+          window.parent.postMessage(
+            { type: "error", data: "No overlays in local storage" },
+            "*"
+          );
+          break;
+        }
+        window.parent.postMessage({ type: "loadedLocalStorage" }, "*");
       case "overlays":
         /**
-         * @type {{[id: string]: {id: string, x: number, y: number, width: number, height: number, src: string}}}
+         * @type {{overlays: {[id: string]: {id: string, x: number, y: number, width: number, height: number, src: string}}, lastUpdate: number}}
          */
         var overlaysData = message.data;
-        for (const overlayId in overlaysData) {
-          const overlay = overlaysData[overlayId];
-          const { id, x, y, width, height, src } = overlay;
-          createOverlay(id, x, y, width, height, src);
+        if (corniferData.lastUpdate < overlaysData.lastUpdate) {
+          for (const overlayId in overlaysData.overlays) {
+            const overlay = overlaysData.overlays[overlayId];
+            const { id, x, y, width, height, src } = overlay;
+            if (!id || !x || !y || !width || !height || !src) {
+              console.error("Invalid overlay");
+              continue;
+            }
+
+            if (corniferData.overlays[id]) {
+              // updateOverlay(id, x, y, width, height, src);
+            } else {
+              createOverlay(id, x, y, width, height, src);
+            }
+          }
+          corniferData.lastUpdate = overlaysData.lastUpdate;
         }
         break;
       default:
         break;
     }
+
+    localStorage.setItem("cornifer-overlays", JSON.stringify(corniferData));
   };
 }
 
@@ -263,20 +335,20 @@ function connectIframe() {
  * @returns {HTMLDivElement}
  */
 function createOverlay(id, x, y, width, height, src) {
-  x *= 50;
-  y *= 50;
-  width *= 50;
-  height *= 50;
+  const canvasX = x * 50;
+  const canvasY = y * 50;
+  const canvasWidth = width * 50;
+  const canvasHeight = height * 50;
   const div = document.createElement("div");
   div.className = "cornifer-overlay";
   div.id = "cornifer-overlay-" + id;
-  div.style = `height:${height}px; width:${width}px; position: absolute; inset: 0px; transform: translateX(${x}px) translateY(${y}px); background-size: cover; image-rendering: pixelated; background-image: url('${src}'); opacity: 1`;
+  div.style = `height:${canvasHeight}px; width:${canvasWidth}px; position: absolute; inset: 0px; transform: translateX(${canvasX}px) translateY(${canvasY}px); background-size: cover; image-rendering: pixelated; background-image: url('${src}'); opacity: 1`;
   document
     .getElementsByTagName("mona-lisa-embed")[0]
     .shadowRoot.children[0].getElementsByTagName("mona-lisa-camera")[0]
     .shadowRoot.children[0].children[0].children[0].appendChild(div);
 
-  overlays[id] = {
+  corniferData.overlays[id] = {
     id,
     x,
     y,
@@ -298,12 +370,12 @@ function createOverlay(id, x, y, width, height, src) {
  * @returns
  */
 function updateOverlay(id, x, y, width, height, src) {
-  if (!overlays[id]) {
+  if (!corniferData.overlays[id]) {
     console.error("Overlay doesn't exist");
     return;
   }
 
-  const overlay = overlays[id];
+  const overlay = corniferData.overlays[id];
 
   if (x) {
     overlay.x = x;
