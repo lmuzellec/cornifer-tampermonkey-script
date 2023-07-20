@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cornifer for place
 // @namespace    https://github.com/lmuzellec/cornifer-tampermonkey-script
-// @version      1.1.0
+// @version      1.1.1
 // @description  try to take over r/place!
 // @author       Louis Muzellec <github.com/lmuzellec>
 // @match        https://garlic-bread.reddit.com/embed*
@@ -9,7 +9,8 @@
 // @match        https://new.reddit.com/r/place/*
 // @connect      lmuzellec.dev
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=reddit.com
-// @grant        none
+// @grant        GM_addStyle
+// @grant        GM_getResourceText
 // @require	     https://cdn.jsdelivr.net/npm/toastify-js
 // @resource     TOASTIFY_CSS https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css
 // ==/UserScript==
@@ -57,7 +58,7 @@ function mainFromReddit() {
   console.log("Cornifer script loaded from reddit");
 
   // inject toastify css
-  // GM_addStyle(GM_getResourceText("TOASTIFY_CSS"));
+  GM_addStyle(GM_getResourceText("TOASTIFY_CSS"));
 
   // find r/place iframe
   iframe = document.querySelector(
