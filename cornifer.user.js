@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Cornifer for place
 // @namespace    https://github.com/lmuzellec/cornifer-tampermonkey-script
-// @version      1.0.0
+// @version      1.1.0
 // @description  try to take over r/place!
 // @author       Louis Muzellec <github.com/lmuzellec>
-// @match        https://hot-potato.reddit.com/embed*
+// @match        https://garlic-bread.reddit.com/embed*
 // @match        https://www.reddit.com/r/place/*
 // @match        https://new.reddit.com/r/place/*
 // @connect      lmuzellec.dev
@@ -57,11 +57,11 @@ function mainFromReddit() {
   console.log("Cornifer script loaded from reddit");
 
   // inject toastify css
-  GM_addStyle(GM_getResourceText("TOASTIFY_CSS"));
+  // GM_addStyle(GM_getResourceText("TOASTIFY_CSS"));
 
   // find r/place iframe
   iframe = document.querySelector(
-    'iframe[src*="https://hot-potato.reddit.com/embed"]'
+    'iframe[src*="https://garlic-bread.reddit.com/embed"]'
   );
 
   // connect to Cornifer-server
@@ -164,7 +164,7 @@ function connectSocket() {
    * @returns
    */
   window.onmessage = (event) => {
-    if (event.origin !== "https://hot-potato.reddit.com") return;
+    if (event.origin !== "https://garlic-bread.reddit.com") return;
     const message = event.data;
     if (!message.type) {
       console.error("No type in message from iframe");
@@ -213,7 +213,7 @@ function showToastError(text, duration = 5000) {
  */
 
 /**
- * @type {{overlays: {[key: string]: {id: string, x: number, y: number, width: number, height: number, src: string}}, lastUpdate: number}}
+ * @type {{overlays: {[key: string]: {id: string, x: number, y: number, width: number, height: number, src: string, element: HTMLDivElement}}, lastUpdate: number}}
  */
 var corniferData = {
   overlays: {},
@@ -228,6 +228,8 @@ function mainFromIframe() {
   console.log("Cornifer script loaded from iframe");
 
   connectIframe();
+
+  setupControl();
 }
 
 function connectIframe() {
@@ -335,17 +337,17 @@ function connectIframe() {
  * @returns {HTMLDivElement}
  */
 function createOverlay(id, x, y, width, height, src) {
-  const canvasX = x * 50;
-  const canvasY = y * 50;
+  const canvasX = 25000 + x * 50;
+  const canvasY = 25000 + y * 50;
   const canvasWidth = width * 50;
   const canvasHeight = height * 50;
   const div = document.createElement("div");
   div.className = "cornifer-overlay";
   div.id = "cornifer-overlay-" + id;
-  div.style = `height:${canvasHeight}px; width:${canvasWidth}px; position: absolute; inset: 0px; transform: translateX(${canvasX}px) translateY(${canvasY}px); background-size: cover; image-rendering: pixelated; background-image: url('${src}'); opacity: 1`;
+  div.style = `height:${canvasHeight}px; width:${canvasWidth}px; position: absolute;inset: 0px;transform: translateX(${canvasX}px) translateY(${canvasY}px); background-size: cover;image-rendering: pixelated;background-image: url('${src}'); opacity: 1;`;
   document
-    .getElementsByTagName("mona-lisa-embed")[0]
-    .shadowRoot.children[0].getElementsByTagName("mona-lisa-camera")[0]
+    .getElementsByTagName("garlic-bread-embed")[0]
+    .shadowRoot.children[0].getElementsByTagName("garlic-bread-camera")[0]
     .shadowRoot.children[0].children[0].children[0].appendChild(div);
 
   corniferData.overlays[id] = {
@@ -397,4 +399,70 @@ function updateOverlay(id, x, y, width, height, src) {
     overlay.src = src;
     overlay.element.style.backgroundImage = `url(${src})`;
   }
+}
+
+function setupControl() {
+  const toggle = setupDotToggle();
+
+  const slider = setupOpacitySlider();
+
+  const bottomControls = document
+    .getElementsByTagName("garlic-bread-embed")[0]
+    .shadowRoot.children[0].getElementsByClassName("bottom-controls")[0];
+
+  bottomControls.appendChild(toggle);
+  bottomControls.appendChild(slider);
+}
+
+function setupDotToggle() {
+  const toggle = document.createElement("div");
+  toggle.style = `height: 36px; width: 100px; position: absolute; right: 350px; top: 0; background-color: #FFF; pointer-events: all; border-radius: 26px; display: flex; justify-content: space-around; align-items: center;`;
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.name = "toggle";
+  input.addEventListener("click", (event) => {
+    Object.values(corniferData.overlays).forEach((overlay) => {
+      const element = overlay.element;
+      if (event.currentTarget.checked) {
+        element.style[
+          "-webkit-mask-image"
+        ] = `url("https://raw.githubusercontent.com/lmuzellec/cornifer-tampermonkey-script/main/Dot.svg")`;
+        element.style["-webkit-mask-repeat"] = "repeat";
+        element.style["-webkit-mask-size"] = "50px";
+      } else {
+        element.style["-webkit-mask-image"] = null;
+        element.style["-webkit-mask-repeat"] = null;
+        element.style["-webkit-mask-size"] = null;
+      }
+    });
+  });
+  const label = document.createElement("label");
+  label.style = "color: black;";
+  label.innerHTML = "Toggle dot";
+  label.for = "toggle";
+  toggle.appendChild(input);
+  toggle.appendChild(label);
+  return toggle;
+}
+
+function setupOpacitySlider() {
+  const slider = document.createElement("div");
+
+  slider.style = `height: 36px; width: 200px; position: absolute; right: 100px; top: 0; background-color: #FFF; pointer-events: all; border-radius: 26px;`;
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = "0";
+  input.max = "1";
+  input.step = "0.1";
+  input.value = "1";
+  input.style =
+    " margin: 10px;left: 0;right: 0;top: 0;bottom: 0;box-sizing: border-box;position: absolute;";
+  input.id = "templateSlider";
+  input.addEventListener("input", (event) => {
+    Object.values(corniferData.overlays).forEach((overlay) => {
+      overlay.element.style.opacity = event.currentTarget.value;
+    });
+  });
+  slider.appendChild(input);
+  return slider;
 }
