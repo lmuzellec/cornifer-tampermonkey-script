@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cornifer for place
 // @namespace    https://github.com/lmuzellec/cornifer-tampermonkey-script
-// @version      1.1.1
+// @version      1.1.2
 // @description  try to take over r/place!
 // @author       Louis Muzellec <github.com/lmuzellec>
 // @match        https://garlic-bread.reddit.com/embed*
@@ -11,7 +11,7 @@
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=reddit.com
 // @grant        GM_addStyle
 // @grant        GM_getResourceText
-// @require	     https://cdn.jsdelivr.net/npm/toastify-js
+// @require      https://cdn.jsdelivr.net/npm/toastify-js
 // @resource     TOASTIFY_CSS https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css
 // ==/UserScript==
 
@@ -33,6 +33,11 @@ var loadedLocalStorage = false;
  * @type {number}
  */
 var increasingTimeout = 1;
+
+/**
+ * @type {string}
+ */
+var embedName = "garlic-bread";
 
 /**
  * Start the corresponding script when everything is loaded
@@ -62,7 +67,7 @@ function mainFromReddit() {
 
   // find r/place iframe
   iframe = document.querySelector(
-    'iframe[src*="https://garlic-bread.reddit.com/embed"]'
+    `iframe[src*="https://${embedName}.reddit.com/embed"]`
   );
 
   // connect to Cornifer-server
@@ -165,14 +170,14 @@ function connectSocket() {
    * @returns
    */
   window.onmessage = (event) => {
-    if (event.origin !== "https://garlic-bread.reddit.com") return;
+    if (event.origin !== `https://${embedName}.reddit.com`) return;
     const message = event.data;
     if (!message.type) {
       console.error("No type in message from iframe");
       return;
     }
 
-    switch (event.data.type) {
+    switch (message.type) {
       case "loadedLocalStorage":
         showToast("Overlays loaded from local storage");
         break;
@@ -282,7 +287,7 @@ function connectIframe() {
             return;
           }
 
-          updateOverlay(updateData.id, x, y, width, height, src);
+          updateOverlay(id, x, y, width, height, src);
           corniferData.lastUpdate = Date.now();
         }
         break;
@@ -347,8 +352,8 @@ function createOverlay(id, x, y, width, height, src) {
   div.id = "cornifer-overlay-" + id;
   div.style = `height:${canvasHeight}px; width:${canvasWidth}px; position: absolute;inset: 0px;transform: translateX(${canvasX}px) translateY(${canvasY}px); background-size: cover;image-rendering: pixelated;background-image: url('${src}'); opacity: 1;`;
   document
-    .getElementsByTagName("garlic-bread-embed")[0]
-    .shadowRoot.children[0].getElementsByTagName("garlic-bread-camera")[0]
+    .getElementsByTagName(`${embedName}-embed`)[0]
+    .shadowRoot.children[0].getElementsByTagName(`${embedName}-camera`)[0]
     .shadowRoot.children[0].children[0].children[0].appendChild(div);
 
   corniferData.overlays[id] = {
@@ -408,7 +413,7 @@ function setupControl() {
   const slider = setupOpacitySlider();
 
   const bottomControls = document
-    .getElementsByTagName("garlic-bread-embed")[0]
+    .getElementsByTagName(`${embedName}-embed`)[0]
     .shadowRoot.children[0].getElementsByClassName("bottom-controls")[0];
 
   bottomControls.appendChild(toggle);
